@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>MotionPresenter - An appcessary which aids presentation</title>
+</head>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+<link rel="stylesheet" href="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.3.0/styles/default.min.css">
+
+<body>
+<h1>Welcome to the page of MotionPresenter</h1>
+<h2>What is MotionPresenter?</h2>
+<p>MotionPresenter is an appcessary which
+<ul>
+<li>turns a health-monitoring device into a wireless motion presenter</li>
+<li>aids presenters by releasing one hand for other purposes</li>
+</ul>
+</p>
+<h2>Motivation</h2>
+<ul>
+<li>Giving presentation is essential for professors, students and business people.</li>
+<li>Holding a stick-like presenter is clusmy for human presenters.</li>
+<li>It is not true that motion presenter selling now using human motion to aid presentation.</li>
+</ul>
+<h2>Making use of Glance device</h2>
+<p>Glance device is a health-monitoring device with a 3-axis accelerometer and a 3-axis gyroscope. This app makes use of the data from gyroscope to detect wrist movement.</p>
+<img src="img/gyroscope_data.png" class="img-responsive" alt="An screenshot capturing the result from Glance device" style="width:75%;" />
+<p>The following screenshot are some data captured and characteristic of data catured</p>
+<img src="img/right_action.png" class="img-responsive" alt="An screenshot showing the characteristic of a right turn of wrist" style="width:75%;" />
+<img src="img/left_action.png" class="img-responsive" alt="An screenshot showing the characteristic of a left turn of wrist" style="width:75%;" />
+<h2>Turning action into command</h2>
+<p>From the previous part, there are some characteristic of the movement of wrist. In order to capture those characteristics and turn them into commands, some code are being try out.</p>
+<h3>First Trial <small>Done in late March</small></h3>
+<p>Below is some variable defined in the app.</p>
+<pre><code class="java">private boolean step1R = false;
+private boolean step2R = false;
+private boolean step3R = false;
+private boolean step1L = false;
+private boolean step2L = false;
+private boolean step3L = false;
+</code></pre>
+<pre>
+<code class="java">private boolean checkLeft(short incoming) {
+        boolean result = false;
+        if(incoming < -10000) {
+            step1L = true;
+        }
+        if(incoming < -10000 && step1L) {
+            Log.d(TAG, "step1L pass");
+            step2L = true;
+        }
+        if(incoming > 10000 && step2L) {
+            Log.d(TAG, "step2L pass");
+            step3L = true;
+        }
+        if(incoming > 10000 && step3L) {
+            Log.d(TAG, "step3L pass");
+            //Log.d(TAG, "Right");
+            step1L = false;
+            step2L = false;
+            step3L = false;
+
+            step1LTime = 0;
+            step2LTime = 0;
+            step3LTime = 0;
+            return true;
+        }
+        return result;
+    }
+    private boolean checkRight(short incoming) {
+        boolean result = false;
+        if(incoming > 10000) {
+            step1R = true;
+        }
+        if(incoming > 10000 && step1R) {
+            Log.d(TAG, "step1R pass");
+            step2R = true;
+        }
+        if(incoming < -10000 && step2R) {
+            Log.d(TAG, "step2R pass");
+            step3R = true;
+        }
+        if(incoming < -10000 && step3R) {
+            Log.d(TAG, "step3R pass");
+            //Log.d(TAG, "Right");
+            step1R = false;
+            step2R = false;
+            step3R = false;
+
+            step1RTime = 0;
+            step2RTime = 0;
+            step3RTime = 0;
+
+            return true;
+        }
+        return result;
+    }
+</code>
+</pre>
+<p>Code above can detect the movement of wrist, but there are many false-positive detection such as turning the wrist back to original position will still detect a right turn of wrist. These false-positive cases will make the presentation hard to control.</p>
+<h3>Second trial <small>Done in late April</small></h3>
+<p>After the instability of the previous code, by observating the data in detail, there is a major parameter which has not been taken into consideration in the first trial - time and period. After including the time constraint, the detection is more precise than before.</p>
+<p>In order to capture the time of each data, some more variables are defined.</p>
+<pre><code class="java">private long step1RTime = 0;
+private long step2RTime = 0;
+private long step3RTime = 0;
+private long step1LTime = 0;
+private long step2LTime = 0;
+private long step3LTime = 0;
+</code></pre>
+<pre>
+<code class="java">private static final long TIMEOUT = 30; //ms
+private boolean checkLeft(short incoming) {
+        boolean result = false;
+        Date date = new Date();
+        long temp = date.getTime();
+        if(incoming < -10000) {
+            step1L = true;
+            step1LTime = date.getTime();
+        }
+        if(incoming < -10000 && step1L && (temp - step1LTime) < TIMEOUT*3) {
+            Log.d(TAG, "step1L pass");
+            step2L = true;
+            step2LTime = date.getTime();
+        }
+        if(incoming > 10000 && step2L && (temp - step2LTime) < TIMEOUT*10) {
+            Log.d(TAG, "step2L pass");
+            step3L = true;
+            step3LTime = date.getTime();
+        }
+        if(incoming > 10000 && step3L && (temp - step3LTime) < TIMEOUT*3 && (temp - step1LTime) < TIMEOUT*20) {
+            Log.d(TAG, "step3L pass");
+            //Log.d(TAG, "Right");
+            step1L = false;
+            step2L = false;
+            step3L = false;
+
+            step1LTime = 0;
+            step2LTime = 0;
+            step3LTime = 0;
+            return true;
+        }
+        return result;
+    }
+    private boolean checkRight(short incoming) {
+        boolean result = false;
+        Date date = new Date();
+        long temp = date.getTime();
+        if(incoming > 10000) {
+            step1R = true;
+            step1RTime = date.getTime();
+        }
+        if(incoming > 10000 && step1R && (temp - step1RTime) < TIMEOUT*3) {
+            Log.d(TAG, "step1R pass");
+            step2R = true;
+            step2RTime = date.getTime();
+        }
+        if(incoming < -10000 && step2R && (temp - step2RTime) < TIMEOUT*10) {
+            Log.d(TAG, "step2R pass");
+            step3R = true;
+            step3RTime = date.getTime();
+        }
+        if(incoming < -10000 && step3R && (temp - step3RTime) < TIMEOUT*3 && (temp - step1RTime) < TIMEOUT*20) {
+            Log.d(TAG, "step3R pass");
+            //Log.d(TAG, "Right");
+            step1R = false;
+            step2R = false;
+            step3R = false;
+
+            step1RTime = 0;
+            step2RTime = 0;
+            step3RTime = 0;
+
+            return true;
+        }
+        return result;
+    }
+</code>
+</pre>
+<h2>Control flow of the app</h2>
+<p>After turning motion data into commands, the control flow of the app is easy to handle.</p>
+<pre>First check if there are any action (Left or Right turn) is detected before.
+	If Yes, do nothing.
+	If No,
+		Check if the present value satisfy the left turn.
+		If Yes, change the image to previous image.
+		If No, do nothing.
+		Check if the present value satisfy the right turn.
+		If Yes, change the image to next image.
+		If No, do nothing.
+</pre>
+<h2>Reading Files from phone</h2>
+<p>After processing the motion data, another part for this app is importing files from the phone. The basic concept is to send an <a href="http://developer.android.com/guide/components/intents-common.html">Intent</a> to the OS for choosing files. Then the Intent will return the path of the files for later processing.</p>
+<p>For more details, please refer to <a href="https://magiclen.org/android-filechooser/" target="_blank">this site</a> (Chinese only).</p>
+<h2>UI of the app</h2>
+<p>Simple is beauty. This app doesn't decorate much.</p>
+<img src="img/app_ui.png" class="img-responsive" alt="An screenshot capturing the result from Glance device" style="width:75%;" />
+<p>In order to utilize the whole screen, the app has been put in <a href="http://developer.android.com/training/system-ui/immersive.html" target="_blank">immersive mode</a>. Users can call the notification drawer out by swiping the screen from top to bottom.</p>
+<h2>How to use the app?</h2>
+<ol>
+<li>Search for Glance device and connect to it.</li>
+<li>Add image to the app</li>
+<li>Press 'Motion Presentation'</li>
+<li>Press 'Start Streaming'</li>
+<li>Press 'Start Presentation'</li>
+</ol>
+<h2>Mission Completed!</h2>
+<p>This appcessary turns a health-monitoring device into a wireless motion presenter with following features</p>
+<ul>
+<li>Using wrist movement to control the change of images</li>
+<li>Turning a smartphone into a source of presentation</li>
+</ul>
+<h2>Wait! There are something missing!</h2>
+<p>This appcessary actually is proof of concept that smartphone can replace ordinary notebook computers to do presentation. The following are missions incompleted.</p>
+<ul>
+<li>Effects of the original presentation are lost due to only still image can be used in this app.</li>
+<li>More motion can be detected (e.g hand swing).</li>
+<li>The order of images should be changable.</li>
+<li>Loading large images in a more efficient way.</li>
+</ul>
+</body>
+
+<script src="http://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.3.0/highlight.min.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+</html>
+
